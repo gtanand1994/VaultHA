@@ -48,8 +48,10 @@ services:
       - "8500:8500"
     networks:
       - consul-net
+    volumes:
+      - ../consul-data:/consul/data
     environment:
-      - 'CONSUL_LOCAL_CONFIG={"skip_leave_on_interrupt": true,  "log_level": "DEBUG",  "server": true,  "ui": true}'
+      - 'CONSUL_LOCAL_CONFIG={"skip_leave_on_interrupt": true,  "log_level": "DEBUG", "data_dir": "/consul/data",  "server": true,  "ui": true}'
       - CONSUL_BIND_INTERFACE=eth0
       - CONSUL=consul
       - CONSUL_CHECK_LEADER=true
@@ -69,3 +71,30 @@ services:
           failure_action: continue
       endpoint_mode: vip
 
+  nginx:
+    image: nginx:latest
+    labels: [app=nginx]
+    ports:
+      - "80:80"
+      - "433:433"
+    networks:
+        - consul-net
+    volumes:
+      - ../.consulpass:/.consulpass
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./tools/:/tools/
+    entrypoint: bash -c "apt-get update;apt-get install -y netcat; while(true); do if nc -z consul 8500; then break; else sleep 10s; fi; done ; nginx -g 'daemon off;'"
+    depends_on:
+      - consul
+    deploy:
+      mode: global
+      restart_policy:
+          condition: on-failure
+          delay: 5s
+          max_attempts: 3
+          window: 120s
+      update_config:
+          parallelism: 1
+          delay: 10s
+          failure_action: continue
+      endpoint_mode: vip
